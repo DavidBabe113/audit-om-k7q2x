@@ -248,6 +248,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <div class="r"><button class="btn" data-close>Đóng</button></div>
 </div></div>
 
+<div class="modal" id="mErr" hidden><div class="sheet">
+  <h3 id="errTitle">Có lỗi</h3>
+  <p>Bạn chụp màn hình khung bên dưới gửi cho người hỗ trợ để sửa nhanh.</p>
+  <textarea id="errText" readonly rows="9" style="width:100%;font:500 .72rem/1.4 var(--font-mono)"></textarea>
+  <div class="r"><button class="btn" id="errCopy">Sao chép</button><button class="btn pri" data-close>Đóng</button></div>
+</div></div>
+
 <div class="modal" id="mMeas" hidden><div class="sheet">
   <h3>Phương án cải tạo</h3>
   <p>Bật phương án áp dụng cho dự án này và chọn lấy nội dung từ báo cáo nào. Nội dung được chèn đúng vị trí (Site Assessment, Energy Saving Opportunities, Kết luận). Chèn xong vẫn sửa chữ và đổi ảnh như bình thường.</p>
@@ -987,19 +994,36 @@ function doSaveRefresh(){
 /* ---------- goi du an (.zip): chuyen giua dien thoai <-> laptop qua Drive, khong can may chu ---------- */
 async function exportPack(){
   if(!proj){toast('Mở dự án trước');return}
-  let packCancel=false;
-  busy('Đang đóng gói dự án...',()=>{packCancel=true;busy();toast('Đã hủy')});
+  let cancel=false,step='bắt đầu';
+  const cb=()=>{cancel=true;busy();toast('Đã hủy')};
+  busy('Đang đóng gói dự án...',cb);
   try{
+    step='lưu dự án trên máy';
     await kvSet('proj:'+proj.id,proj);
+    step='tạo file zip';
     const z=new JSZip();
     proj.imgFiles=proj.imgFiles||{};
-    for(const k of Object.keys(proj.imgs||{})){const nm=imgFileName(proj,k);z.file('images/'+nm,proj.imgs[k])}
+    const keys=Object.keys(proj.imgs||{});
+    let n=0;
+    for(const k of keys){
+      if(cancel) return;
+      n++;step='đọc ảnh '+n+'/'+keys.length+' ('+k+')';
+      busy('Đang đóng gói ảnh '+n+'/'+keys.length+'...',cb);
+      const nm=imgFileName(proj,k);
+      const buf=await new Response(proj.imgs[k]).arrayBuffer();
+      z.file('images/'+nm,buf);
+    }
+    step='ghi thông tin dự án';
     z.file('project.json',JSON.stringify(cloudPayload(proj),null,1));
-    const blob=await z.generateAsync({type:'blob',compression:'STORE',mimeType:'application/zip'});
-    if(packCancel) return;
+    step='nén zip';
+    busy('Đang tạo file zip...',cb);
+    const u8=await z.generateAsync({type:'uint8array',compression:'STORE'});
+    if(cancel) return;
+    const blob=new Blob([u8],{type:'application/zip'});
+    step='lưu file';
     busy();
     await saveBlob(blob,fileBase().replace(/_Report$/,'')+'_goi-du-an.zip');
-  }catch(e){busy();toast('Không đóng gói được: '+(e&&e.message||e))}
+  }catch(e){busy();showErr('Không đóng gói được dự án',step,e)}
 }
 async function importPack(file){
   busy('Đang nhập gói dự án...');
@@ -1610,6 +1634,15 @@ function fileBase(){
   const d=new Date();const ymd=String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
   return ymd+'_GV_'+proj.name.replace(/[^\w\-]+/g,'_')+'_Report';
 }
+function showErr(title,step,e){
+  const lines=[title,'Bước: '+step,'Lỗi: '+((e&&e.name)||'?')+' — '+((e&&e.message)||String(e)),
+    'Dự án: '+(proj?proj.name+' · '+Object.keys(proj.imgs||{}).length+' ảnh':'(chưa mở)'),
+    'Máy: '+navigator.userAgent,'Phiên bản app: rev26'];
+  if(e&&e.stack) lines.push('',String(e.stack).split('\n').slice(0,4).join('\n'));
+  $('#errTitle').textContent=title;$('#errText').value=lines.join('\n');
+  $('#errCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#errText').value);toast('Đã sao chép')}catch(x){$('#errText').select();toast('Bấm giữ rồi chọn Sao chép')}};
+  $('#mErr').hidden=false;
+}
 let fileUrl=null;
 function offerFile(blob,fn){
   if(fileUrl) URL.revokeObjectURL(fileUrl);
@@ -1645,7 +1678,7 @@ async function doExport(){
   expCancel=false;
   busy('Đang đóng gói file Word...',()=>{expCancel=true;busy();toast('Đã hủy xuất Word')});
   try{const blob=await packDocx();if(expCancel) return;busy();cloudExport(blob,fileBase()+'.docx');await saveBlob(blob,fileBase()+'.docx')}
-  catch(err){busy();toast('Lỗi khi xuất file')}
+  catch(err){busy();showErr('Không xuất được file Word','đóng gói/lưu file',err)}
 }
 
 /* ---------- xuất PDF qua Word (máy chủ nội bộ) ---------- */
