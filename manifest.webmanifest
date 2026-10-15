@@ -1,6 +1,6 @@
 {
-  "name": "Audit Report O&M",
-  "short_name": "Audit O&M",
+  "name": "GV Reports",
+  "short_name": "GV Reports",
   "description": "Chụp ảnh và soạn Energy Audit Report tại công trình",
   "start_url": "./index.html",
   "scope": "./",
