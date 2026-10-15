@@ -1,6 +1,6 @@
 {
-  "name": "GV Reports",
-  "short_name": "GV Reports",
+  "name": "Project Management",
+  "short_name": "Project Mgmt",
   "description": "Chụp ảnh và soạn Energy Audit Report tại công trình",
   "start_url": "./index.html",
   "scope": "./",
